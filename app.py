@@ -1,4 +1,3 @@
-import io
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -123,20 +122,43 @@ with tabs[0]:
 
     st.subheader("1. טעינת הקובץ ל־DataFrame")
     st.code('df = pd.read_csv("Customer Data.csv")', language="python")
-    c1, c2 = st.columns(2)
-    c1.metric("מספר לקוחות (שורות)", f"{raw.shape[0]:,}")
-    c2.metric("מספר עמודות", raw.shape[1])
 
-    st.subheader("2. ‎head()‎")
-    st.dataframe(raw.head(), width="stretch")
+    st.subheader("2. סקירה ראשונית של הנתונים")
 
-    st.subheader("‎info()‎")
-    buf = io.StringIO()
-    raw.info(buf=buf)
-    st.code(buf.getvalue(), language="text")
+    st.markdown('#### חמש השורות הראשונות <span dir="ltr">(df.head())</span>', unsafe_allow_html=True)
+    st.dataframe(raw.head(), width="stretch", hide_index=True)
 
-    st.subheader("‎describe()‎")
-    st.dataframe(raw.describe().T.round(2), width="stretch")
+    st.markdown('#### סוגי עמודות וערכים חסרים <span dir="ltr">(df.info())</span>', unsafe_allow_html=True)
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("שורות", f"{raw.shape[0]:,}")
+    m2.metric("עמודות", raw.shape[1])
+    m3.metric("עמודות מספריות", int(raw.select_dtypes("number").shape[1]))
+    m4.metric("זיכרון", f"{raw.memory_usage(deep=True).sum() / 1024 ** 2:.1f} MB")
+    info_df = pd.DataFrame({
+        "Column": raw.columns,
+        "Dtype": raw.dtypes.astype(str).values,
+        "Non-Null": raw.notna().sum().values,
+        "Missing": raw.isna().sum().values,
+        "Missing %": (raw.isna().mean() * 100).round(2).values,
+        "Unique": raw.nunique().values,
+    })
+    st.dataframe(
+        info_df, width="stretch", hide_index=True,
+        column_config={
+            "Non-Null": st.column_config.ProgressColumn("Non-Null", format="%d", min_value=0, max_value=len(raw)),
+            "Missing %": st.column_config.NumberColumn("Missing %", format="%.2f%%"),
+        },
+    )
+
+    st.markdown('#### סטטיסטיקה תיאורית <span dir="ltr">(df.describe())</span>', unsafe_allow_html=True)
+    desc = raw.describe().T
+    desc["count"] = desc["count"].astype(int)
+    st.dataframe(
+        desc.style.format("{:,.2f}", subset=desc.columns.drop("count"))
+        .format("{:,}", subset=["count"])
+        .background_gradient(cmap="Blues", subset=["mean", "50%"], axis=0),
+        width="stretch",
+    )
     st.markdown(
         "- כל העמודות מספריות חוץ מ־`CUST_ID` (טקסט).\n"
         "- בעמודות הכספיות הממוצע גבוה בהרבה מהחציון. לדוגמה, ב־`CASH_ADVANCE` החציון הוא 0 והממוצע כ־979. "
@@ -230,7 +252,7 @@ with tabs[1]:
     show_fig(fig)
     st.dataframe(pd.DataFrame(out_rows).round(1), width="stretch", hide_index=True)
     st.markdown(
-        "- לפי כלל ה־IQR (‏Q3 + 1.5·IQR) יש מאות לקוחות מעל השפם העליון בשתי העמודות.\n"
+        "- לפי כלל ה־IQR (`Q3 + 1.5·IQR`) יש מאות לקוחות מעל השפם העליון בשתי העמודות.\n"
         "- **החלטה:** לא מוחקים אותם. אלה לקוחות אמיתיים, ולעתים הם בדיוק המעניינים ביותר עסקית "
         "(לקוחות בעלי ערך גבוה, או לקוחות בסיכון). "
         "במקום זה מקטינים את ההשפעה שלהם בעזרת log1p ו־StandardScaler, כך שהמודל לא ייבנה סביבם."
@@ -269,8 +291,8 @@ with tabs[2]:
     st.markdown(
         "- התכונות בסקאלות שונות לגמרי: תכונות כספיות מגיעות לעשרות אלפים, ותכונות התדירות בין 0 ל־1. "
         "בלי סטנדרטיזציה, KMeans (מרחק אוקלידי) היה מתעלם כמעט לגמרי מתכונות התדירות.\n"
-        "- **שלב א:** ‏`log1p` על 8 התכונות הכספיות, כדי לטפל באי־סימטריה ובאאוטליירים מחלק ב׳.\n"
-        "- **שלב ב:** ‏`StandardScaler` על כל 14 התכונות, כך שלכל אחת יש ממוצע 0 וסטיית תקן 1."
+        "- **שלב א:** `log1p` על 8 התכונות הכספיות, כדי לטפל באי־סימטריה ובאאוטליירים מחלק ב׳.\n"
+        "- **שלב ב:** `StandardScaler` על כל 14 התכונות, כך שלכל אחת יש ממוצע 0 וסטיית תקן 1."
     )
     st.code(
         "X = pd.concat([np.log1p(df[MONEY_COLS]), df[FREQ_COLS]], axis=1)\n"
